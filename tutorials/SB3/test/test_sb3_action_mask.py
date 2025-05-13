@@ -52,7 +52,7 @@ def test_action_mask_easy(env_fn):
 
     steps = 8192 * 4
 
-    # Train a model against itself (takes ~2 minutes on GPU)
+    # Train a model_good against itself (takes ~2 minutes on GPU)
     train_action_mask(env_fn, steps=steps, seed=0, **env_kwargs)
 
     # Evaluate 2 games against a random agent
@@ -81,7 +81,7 @@ def test_action_mask_medium(env_fn):
 
     env_kwargs = {}
 
-    # Train a model against itself
+    # Train a model_good against itself
     train_action_mask(env_fn, steps=8192, seed=0, **env_kwargs)
 
     # Evaluate 2 games against a random agent
@@ -109,7 +109,7 @@ def test_action_mask_hard(env_fn):
 
     env_kwargs = {}
 
-    # Train a model against itself
+    # Train a model_good against itself
     train_action_mask(env_fn, steps=8192, seed=0, **env_kwargs)
 
     # Evaluate 2 games against a random agent

@@ -48,9 +48,10 @@ class SimpleEnv(AECEnv):
 
         self.render_mode = render_mode
         pygame.init()
+
         self.viewer = None
-        self.width = 700
-        self.height = 700
+        self.width = 600
+        self.height = 600
         self.screen = pygame.Surface([self.width, self.height])
         self.max_size = 1
         self.game_font = pygame.freetype.Font(
@@ -62,7 +63,7 @@ class SimpleEnv(AECEnv):
         self.renderOn = False
         self._seed()
 
-        self.max_cycles = max_cycles
+        self.max_cycles = 75
         self.scenario = scenario
         self.world = world
         self.continuous_actions = continuous_actions
@@ -121,7 +122,7 @@ class SimpleEnv(AECEnv):
         # Get the original cam_range
         # This will be used to scale the rendering
         all_poses = [entity.state.p_pos for entity in self.world.entities]
-        self.original_cam_range = np.max(np.abs(np.array(all_poses)))
+        self.original_cam_range = 1
 
         self.steps = 0
 
@@ -186,21 +187,14 @@ class SimpleEnv(AECEnv):
 
         self.world.step()
 
-        global_reward = 0.0
-        if self.local_ratio is not None:
-            global_reward = float(self.scenario.global_reward(self.world))
+        rewards = [float(self.scenario.reward(agent, self.world)) for agent in self.world.agents[:3]]
 
+        # Compute average reward
+        avg_reward = sum(rewards) / len(rewards)
+
+        # Assign average reward to each agent
         for agent in self.world.agents:
-            agent_reward = float(self.scenario.reward(agent, self.world))
-            if self.local_ratio is not None:
-                reward = (
-                    global_reward * (1 - self.local_ratio)
-                    + agent_reward * self.local_ratio
-                )
-            else:
-                reward = agent_reward
-
-            self.rewards[agent.name] = reward
+            self.rewards[agent.name] = avg_reward
 
     # set env action for a particular agent
     def _set_action(self, action, agent, action_space, time=None):
@@ -218,14 +212,14 @@ class SimpleEnv(AECEnv):
             else:
                 # process discrete action
                 if action[0] == 1:
-                    agent.action.u[0] = -1.0
+                    agent.action.u[0] = +1.3
                 if action[0] == 2:
-                    agent.action.u[0] = +1.0
+                    agent.action.u[0] = -1.3
                 if action[0] == 3:
-                    agent.action.u[1] = -1.0
-                if action[0] == 4:
                     agent.action.u[1] = +1.0
-            sensitivity = 5.0
+                if action[0] == 4:
+                    agent.action.u[1] = -1.0
+            sensitivity = 1
             if agent.accel is not None:
                 sensitivity = agent.accel
             agent.action.u *= sensitivity
@@ -277,22 +271,29 @@ class SimpleEnv(AECEnv):
             self.renderOn = True
 
     def render(self):
-        if self.render_mode is None:
-            gymnasium.logger.warn(
-                "You are calling render method without specifying any render mode."
-            )
-            return
+        # if self.render_mode is None:
+        #     gymnasium.logger.warn(
+        #         "You are calling render method without specifying any render mode."
+        #     )
+        #     return
 
-        self.enable_render(self.render_mode)
+        self.enable_render("human")
+        rob_image = pygame.image.load("robot.png").convert_alpha()
+        w, h = rob_image.get_size()
+        self.rob_image = pygame.transform.scale(rob_image, (int(w * .12), int(h * .12)))
+
+        hum_image = pygame.image.load("human.png").convert_alpha()
+        w, h = hum_image.get_size()
+        self.hum_image = pygame.transform.scale(hum_image, (int(w * .17), int(h * .17)))
 
         self.draw()
-        if self.render_mode == "rgb_array":
-            observation = np.array(pygame.surfarray.pixels3d(self.screen))
-            return np.transpose(observation, axes=(1, 0, 2))
-        elif self.render_mode == "human":
-            pygame.display.flip()
-            self.clock.tick(self.metadata["render_fps"])
-            return
+        # if self.render_mode == "rgb_array":
+        #     observation = np.array(pygame.surfarray.pixels3d(self.screen))
+        #     return np.transpose(observation, axes=(1, 0, 2))
+        # elif self.render_mode == "human":
+        pygame.display.flip()
+        self.clock.tick(self.metadata["render_fps"])
+        return
 
     def draw(self):
         # clear screen
@@ -300,11 +301,11 @@ class SimpleEnv(AECEnv):
 
         # update bounds to center around agent
         all_poses = [entity.state.p_pos for entity in self.world.entities]
-        cam_range = np.max(np.abs(np.array(all_poses)))
+        cam_range = 4
 
         # The scaling factor is used for dynamic rescaling of the rendering - a.k.a Zoom In/Zoom Out effect
         # The 0.9 is a factor to keep the entities from appearing "too" out-of-bounds
-        scaling_factor = 0.9 * self.original_cam_range / cam_range
+        scaling_factor = self.original_cam_range / cam_range
 
         # update geometry and text positions
         text_line = 0
@@ -315,23 +316,30 @@ class SimpleEnv(AECEnv):
                 -1
             )  # this makes the display mimic the old pyglet setup (ie. flips image)
             x = (
-                (x / cam_range) * self.width // 2 * 0.9
+                (x / cam_range) * self.width / 2
             )  # the .9 is just to keep entities from appearing "too" out-of-bounds
-            y = (y / cam_range) * self.height // 2 * 0.9
-            x += self.width // 2
-            y += self.height // 2
+            y = (y / cam_range) * self.height / 2
+            x += self.width / 2
+            y += self.height / 2
 
             # 350 is an arbitrary scale factor to get pygame to render similar sizes as pyglet
-            if self.dynamic_rescaling:
-                radius = entity.size * 350 * scaling_factor
+            # if self.dynamic_rescaling:
+            radius = entity.size * self.height / 2 * scaling_factor
+            # else:
+            #     radius = entity.size * 350
+            if e > 2:
+                rotated_image = pygame.transform.rotate(self.hum_image, entity.state.heading / np.pi * 180)
+                img_w, img_h = rotated_image.get_size()
+                self.screen.blit(rotated_image, (x - img_w // 2, y - img_h // 2))
             else:
-                radius = entity.size * 350
-
-            pygame.draw.circle(self.screen, entity.color * 200, (x, y), radius)
+                rotated_image = pygame.transform.rotate(self.rob_image, entity.state.heading / np.pi * 180)
+                img_w, img_h = rotated_image.get_size()
+                self.screen.blit(rotated_image, (x - img_w // 2, y - img_h // 2))
             pygame.draw.circle(self.screen, (0, 0, 0), (x, y), radius, 1)  # borders
-            assert (
-                0 < x < self.width and 0 < y < self.height
-            ), f"Coordinates {(x, y)} are out of bounds."
+
+            # assert (
+            #     0 < x < self.width and 0 < y < self.height
+            # ), f"Coordinates {(x, y)} are out of bounds."
 
             # text
             if isinstance(entity, Agent):

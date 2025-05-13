@@ -22,7 +22,7 @@ from pettingzoo.butterfly import pistonball_v6
 def train_butterfly_supersuit(
     env_fn, steps: int = 10_000, seed: int | None = 0, **env_kwargs
 ):
-    # Train a single model to play as each agent in a cooperative Parallel environment
+    # Train a single model_good to play as each agent in a cooperative Parallel environment
     env = env_fn.parallel_env(**env_kwargs)
 
     # Pre-process using SuperSuit (color reduction, resizing and frame stacking)
@@ -91,7 +91,7 @@ def eval(env_fn, num_games: int = 100, render_mode: str | None = None, **env_kwa
     rewards = {agent: 0 for agent in env.possible_agents}
 
     # Note: We train using the Parallel API but evaluate using the AEC API
-    # SB3 models are designed for single-agent settings, we get around this by using he same model for every agent
+    # SB3 models are designed for single-agent settings, we get around this by using he same model_good for every agent
     for i in range(num_games):
         env.reset(seed=i)
 
@@ -130,7 +130,7 @@ if __name__ == "__main__":
         max_cycles=25,
     )
 
-    # Train a model (takes ~3 minutes on a laptop CPU)
+    # Train a model_good (takes ~3 minutes on a laptop CPU)
     # Note: stochastic environment makes training difficult, for better results try order of 2 million (~2 hours on GPU)
     train_butterfly_supersuit(env_fn, steps=40_960 * 2, seed=0, **env_kwargs)
 

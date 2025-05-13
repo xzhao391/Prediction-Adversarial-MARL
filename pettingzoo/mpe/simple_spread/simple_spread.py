@@ -43,10 +43,6 @@ Agent action space: `[no_action, move_left, move_right, move_down, move_up]`
 
 ### Arguments
 
-``` python
-simple_spread_v3.env(N=3, local_ratio=0.5, max_cycles=25, continuous_actions=False, dynamic_rescaling=False)
-```
-
 
 
 `N`:  number of agents and landmarks
@@ -68,14 +64,14 @@ from pettingzoo.mpe._mpe_utils.core import Agent, Landmark, World
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from pettingzoo.utils.conversions import parallel_wrapper_fn
-
-
+import random
+import math
 class raw_env(SimpleEnv, EzPickle):
     def __init__(
         self,
         N=3,
         local_ratio=0.5,
-        max_cycles=25,
+        max_cycles=150,
         continuous_actions=False,
         render_mode=None,
         dynamic_rescaling=False,
@@ -115,60 +111,39 @@ class Scenario(BaseScenario):
         world = World()
         # set any world properties first
         world.dim_c = 2
-        num_agents = N
-        num_landmarks = N
-        world.collaborative = True
+        num_agents = 6
         # add agents
         world.agents = [Agent() for i in range(num_agents)]
         for i, agent in enumerate(world.agents):
             agent.name = f"agent_{i}"
-            agent.collide = True
-            agent.silent = True
-            agent.size = 0.15
-        # add landmarks
-        world.landmarks = [Landmark() for i in range(num_landmarks)]
-        for i, landmark in enumerate(world.landmarks):
-            landmark.name = "landmark %d" % i
-            landmark.collide = False
-            landmark.movable = False
+            if i < 3:
+                agent.size = .3
+                agent.max_speed = 2.0
+            else:
+                agent.size = .4
+                agent.max_speed = 1.6
         return world
 
     def reset_world(self, world, np_random):
         # random properties for agents
         for i, agent in enumerate(world.agents):
-            agent.color = np.array([0.35, 0.35, 0.85])
-        # random properties for landmarks
-        for i, landmark in enumerate(world.landmarks):
-            landmark.color = np.array([0.25, 0.25, 0.25])
-        # set random initial states
-        for agent in world.agents:
-            agent.state.p_pos = np_random.uniform(-1, +1, world.dim_p)
-            agent.state.p_vel = np.zeros(world.dim_p)
-            agent.state.c = np.zeros(world.dim_c)
-        for i, landmark in enumerate(world.landmarks):
-            landmark.state.p_pos = np_random.uniform(-1, +1, world.dim_p)
-            landmark.state.p_vel = np.zeros(world.dim_p)
+            agent.id = i
 
-    def benchmark_data(self, agent, world):
-        rew = 0
-        collisions = 0
-        occupied_landmarks = 0
-        min_dists = 0
-        for lm in world.landmarks:
-            dists = [
-                np.sqrt(np.sum(np.square(a.state.p_pos - lm.state.p_pos)))
-                for a in world.agents
-            ]
-            min_dists += min(dists)
-            rew -= min(dists)
-            if min(dists) < 0.1:
-                occupied_landmarks += 1
-        if agent.collide:
-            for a in world.agents:
-                if self.is_collision(a, agent):
-                    rew -= 1
-                    collisions += 1
-        return (rew, collisions, min_dists, occupied_landmarks)
+        # set random initial states
+        values = [[-3.5, -2.2, 2.2, 3.5], [-1.2, 1.2, 2.2, 3.5], [2.2, 3.5, 2.2, 3.5],
+                  [-3.5, -2.2, -1.2, 1.2], [1.2, 3.5, -1.2, 1.2],
+                  [-3.5, -2.2, -3.5, -2.2], [-1.2, 1.2, -3.5, -2.2], [2.2, 3.5, -3.5, -2.2]]
+
+        for i, agent in enumerate(world.agents):
+            random_value = random.choice(values)  # Randomly select one
+            values.remove(random_value)
+            agent.state.p_pos = np.array([random.uniform(random_value[0], random_value[1]),
+                                          random.uniform(random_value[2], random_value[3])])
+            agent.state.goal = -agent.state.p_pos
+            agent.state.heading = math.atan2(agent.state.goal[1] - agent.state.p_pos[1],
+                                         agent.state.goal[0] - agent.state.p_pos[0])
+            agent.state.p_vel = 0.5 * np.array([np.cos(agent.state.heading), np.sin(agent.state.heading)])
+            agent.state.c = np.zeros(world.dim_c)
 
     def is_collision(self, agent1, agent2):
         delta_pos = agent1.state.p_pos - agent2.state.p_pos
@@ -177,36 +152,60 @@ class Scenario(BaseScenario):
         return True if dist < dist_min else False
 
     def reward(self, agent, world):
-        # Agents are rewarded based on minimum agent distance to each landmark, penalized for collisions
-        rew = 0
-        if agent.collide:
-            for a in world.agents:
-                rew -= 1.0 * (self.is_collision(a, agent) and a != agent)
-        return rew
-
-    def global_reward(self, world):
-        rew = 0
-        for lm in world.landmarks:
-            dists = [
-                np.sqrt(np.sum(np.square(a.state.p_pos - lm.state.p_pos)))
-                for a in world.agents
-            ]
-            rew -= min(dists)
-        return rew
-
-    def observation(self, agent, world):
-        # get positions of all entities in this agent's reference frame
-        entity_pos = []
-        for entity in world.landmarks:  # world.entities:
-            entity_pos.append(entity.state.p_pos - agent.state.p_pos)
-        # communication of all other agents
-        comm = []
-        other_pos = []
+        collision_reward = 0.0
+        if agent.ADV_action[0] == 5:
+            collision_reward += .05
+        if agent.ADV_action[1] == 5:
+            collision_reward += .05
+        min_dist_value = 10
         for other in world.agents:
             if other is agent:
                 continue
-            comm.append(other.state.c)
-            other_pos.append(other.state.p_pos - agent.state.p_pos)
-        return np.concatenate(
-            [agent.state.p_vel] + [agent.state.p_pos] + entity_pos + other_pos + comm
-        )
+            dist = np.linalg.norm(agent.state.p_pos - other.state.p_pos)
+            min_dist = agent.size + other.size
+            if dist < min_dist:
+                collision_reward += 5.0  # Strong reward for successful collision
+
+            if dist < min_dist_value:
+                min_dist_value = dist
+                closest_agent = other
+
+        direction = closest_agent.state.p_pos - agent.state.p_pos
+        dist = np.linalg.norm(closest_agent.state.p_pos - agent.state.p_pos)
+        vel_alignment = np.dot(agent.state.p_vel, direction / (np.linalg.norm(direction) + 1e-6))
+        if dist >= 0.7 and dist < 1.3:
+            collision_reward += .2 / (dist**2 + 1e-2)  # Encourage getting closer
+            if vel_alignment > 0:
+                collision_reward += 0.02 * vel_alignment / (dist**2 + 1e-2)  # Higher if moving directly toward them
+        return collision_reward
+
+
+    def observation(self, agent, world):
+        # Normalize values (assume world range ~ [-5, 5])
+        norm = lambda x: x / 5.0
+
+        # Own features
+        p_pos = norm(agent.state.p_pos)
+        goal_rel_pos = norm(agent.state.goal - agent.state.p_pos)
+        p_vel = norm(agent.state.p_vel)
+        heading = agent.state.heading / np.pi  # Normalize to [-1, 1]
+
+        own_features = np.concatenate([p_pos, goal_rel_pos, p_vel, [heading]])
+
+        # Other agents' relative positions and velocities
+        other_features = []
+        for other in world.agents:
+            if other is agent:
+                continue
+            rel_pos = norm(other.state.p_pos - agent.state.p_pos)
+            rel_vel = norm(other.state.p_vel)
+            rel_heading = (other.state.heading - agent.state.heading) / np.pi  # relative heading
+            other_features.append(np.concatenate([rel_pos, rel_vel, [rel_heading]]))
+
+        if other_features:
+            other_features = np.concatenate(other_features)
+        else:
+            other_features = np.zeros(0)
+
+        obs = np.concatenate([own_features, other_features])
+        return obs

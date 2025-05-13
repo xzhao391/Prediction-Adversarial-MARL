@@ -76,7 +76,7 @@ def mask_fn(env):
 
 
 def train_action_mask(env_fn, steps=10_000, seed=0, **env_kwargs):
-    """Train a single model to play as each agent in a zero-sum game environment using invalid action masking."""
+    """Train a single model_good to play as each agent in a zero-sum game environment using invalid action masking."""
     env = env_fn.env(**env_kwargs)
 
     print(f"Starting training on {str(env.metadata['name'])}.")
@@ -187,7 +187,7 @@ if __name__ == "__main__":
     # 20k steps: Winrate:  0.86, loss order of 1e-04
     # 40k steps: Winrate:  0.86, loss order of 7e-06
 
-    # Train a model against itself (takes ~20 seconds on a laptop CPU)
+    # Train a model_good against itself (takes ~20 seconds on a laptop CPU)
     train_action_mask(env_fn, steps=20_480, seed=0, **env_kwargs)
 
     # Evaluate 100 games against a random agent (winrate should be ~80%)

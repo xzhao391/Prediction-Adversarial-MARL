@@ -20,7 +20,7 @@ from pettingzoo.butterfly import knights_archers_zombies_v10
 
 
 def train(env_fn, steps: int = 10_000, seed: int | None = 0, **env_kwargs):
-    # Train a single model to play as each agent in an AEC environment
+    # Train a single model_good to play as each agent in an AEC environment
     env = env_fn.parallel_env(**env_kwargs)
 
     # Add black death wrapper so the number of agents stays constant
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     # Set vector_state to false in order to use visual observations (significantly longer training time)
     env_kwargs = dict(max_cycles=100, max_zombies=4, vector_state=True)
 
-    # Train a model (takes ~5 minutes on a laptop CPU)
+    # Train a model_good (takes ~5 minutes on a laptop CPU)
     train(env_fn, steps=81_920, seed=0, **env_kwargs)
 
     # Evaluate 10 games (takes ~10 seconds on a laptop CPU)

@@ -111,7 +111,7 @@ def get_agents(
     args.state_shape = observation_space.shape or observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
     if agent_learn is None:
-        # model
+        # model_good
         net = Net(
             args.state_shape,
             args.action_shape,

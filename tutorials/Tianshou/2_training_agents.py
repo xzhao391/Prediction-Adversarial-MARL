@@ -37,7 +37,7 @@ def _get_agents(
         else env.observation_space
     )
     if agent_learn is None:
-        # model
+        # model_good
         net = Net(
             state_shape=observation_space.shape or observation_space.n,
             action_shape=env.action_space.shape or env.action_space.n,
